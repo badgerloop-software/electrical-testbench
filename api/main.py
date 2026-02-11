@@ -3,6 +3,7 @@ import websockets
 import can
 import json
 from can_utils.read_can_messages import MyListener
+from can_utils.encode_signal import encode_signal_to_can
 import logging
 
 logging.basicConfig(
@@ -54,6 +55,36 @@ async def handle_connection(websocket):
     try:
         async for message in websocket:
             logging.info(f"Received from client: {message}")
+            
+            # Handle incoming signal updates from dashboard
+            try:
+                data = json.loads(message)
+                if data.get("type") == "signal_update":
+                    signal_name = data.get("signal_name")
+                    value = data.get("value")
+                    
+                    if signal_name and value is not None:
+                        # Encode and send CAN message
+                        result = encode_signal_to_can(signal_name, value)
+                        if result:
+                            can_id, data_bytes = result
+                            can_msg = can.Message(
+                                arbitration_id=can_id,
+                                data=data_bytes,
+                                is_extended_id=False
+                            )
+                            try:
+                                bus.send(can_msg)
+                                logging.info(f"Sent CAN message: {signal_name}={value}")
+                            except can.CanError as e:
+                                logging.error(f"Failed to send CAN message: {e}")
+                        else:
+                            logging.warning(f"Failed to encode signal: {signal_name}")
+            except json.JSONDecodeError:
+                logging.warning(f"Received non-JSON message: {message}")
+            except Exception as e:
+                logging.error(f"Error processing message: {e}")
+                
     except websockets.exceptions.ConnectionClosed:
         logging.info("Client disconnected")
     finally:
