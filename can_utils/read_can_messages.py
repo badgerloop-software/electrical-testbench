@@ -91,30 +91,83 @@ class MyListener(can.Listener):
             )
             data_type = signals_info.type
             signal_name = signals_info.name
-            if data_type == "float":
-                if len(byte_array) < 4:
-                    logging.error(
-                        f"Insufficient data for float signal in CAN ID {can_id:0x}."
-                    )
-                    return None
-                else:
-                    # Unpack the first 4 bytes as a little-endian float.
-                    float_value = struct.unpack("<f", byte_array[:4])[0]
-                    logging.debug(
-                        f"New Message: ID={can_id:0x},Name={signal_name} Value={float_value}, Time Stamp={message_data['timestamp']}"
-                    )
-                    return ParsedData(
-                        can_id, signal_name, float_value, message_data["timestamp"]
-                    )
+            num_bytes = signals_info.bytes
 
-            elif data_type == "boolean":
-                bool_value = bool((byte_array[0] >> offset) & 1)
-                logging.debug(
-                    f"New Message: ID={can_id:0x},Name={signal_name} Value={bool_value}, Time Stamp={message_data['timestamp']}"
-                )
-                return ParsedData(
-                    can_id, signal_name, bool_value, message_data["timestamp"]
-                )
+            # Offset in format.json is in bits. Convert to byte index + bit index
+            byte_index = int(offset) // 8
+            bit_index = int(offset) % 8
+
+            try:
+                if data_type == "float":
+                    # Support 4-byte IEEE float and also 2-byte 'float' treated as int->float fallback
+                    if num_bytes >= 4:
+                        if len(byte_array) >= byte_index + 4:
+                            value = struct.unpack_from("<f", byte_array, byte_index)[0]
+                        else:
+                            logging.error(f"Insufficient data for float signal '{signal_name}' in CAN ID {can_id:0x}.")
+                            return None
+                    elif num_bytes == 2:
+                        # Fallback: read as signed 16-bit and use as float
+                        if len(byte_array) >= byte_index + 2:
+                            raw = struct.unpack_from("<h", byte_array, byte_index)[0]
+                            value = float(raw)
+                        else:
+                            logging.error(f"Insufficient data for 2-byte float signal '{signal_name}' in CAN ID {can_id:0x}.")
+                            return None
+                    else:
+                        # 1-byte float fallback
+                        if len(byte_array) > byte_index:
+                            value = float(byte_array[byte_index])
+                        else:
+                            logging.error(f"Insufficient data for 1-byte float signal '{signal_name}' in CAN ID {can_id:0x}.")
+                            return None
+
+                    logging.debug(
+                        f"New Message: ID={can_id:0x},Name={signal_name} Value={value}, Time Stamp={message_data['timestamp']}"
+                    )
+                    return ParsedData(can_id, signal_name, value, message_data["timestamp"])
+
+                elif data_type in ("bool", "boolean"):
+                    # Determine the byte and bit and extract boolean
+                    if len(byte_array) > byte_index:
+                        bool_value = bool((byte_array[byte_index] >> bit_index) & 1)
+                        logging.debug(
+                            f"New Message: ID={can_id:0x},Name={signal_name} Value={bool_value}, Time Stamp={message_data['timestamp']}"
+                        )
+                        return ParsedData(can_id, signal_name, bool_value, message_data["timestamp"])
+                    else:
+                        logging.error(f"Insufficient data for boolean signal '{signal_name}' in CAN ID {can_id:0x}.")
+                        return None
+
+                elif data_type in ("uint8", "uint16", "uint32", "uint64", "int8", "int16"):
+                    fmt = None
+                    if num_bytes == 1:
+                        fmt = "<B"
+                    elif num_bytes == 2:
+                        fmt = "<H"
+                    elif num_bytes == 4:
+                        fmt = "<I"
+                    elif num_bytes == 8:
+                        fmt = "<Q"
+
+                    if fmt and len(byte_array) >= byte_index + num_bytes:
+                        raw = struct.unpack_from(fmt, byte_array, byte_index)[0]
+                        value = float(raw)
+                        logging.debug(
+                            f"New Message: ID={can_id:0x},Name={signal_name} Value={value}, Time Stamp={message_data['timestamp']}"
+                        )
+                        return ParsedData(can_id, signal_name, value, message_data["timestamp"])
+                    else:
+                        logging.error(f"Insufficient data for integer signal '{signal_name}' in CAN ID {can_id:0x}.")
+                        return None
+
+                else:
+                    logging.debug(f"Unhandled data type '{data_type}' for signal '{signal_name}'")
+                    return None
+
+            except struct.error as e:
+                logging.error(f"Struct error while parsing signal '{signal_name}' in CAN ID {can_id:0x}: {e}")
+                return None
 
 
 if __name__ == "__main__":

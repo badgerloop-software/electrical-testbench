@@ -189,30 +189,31 @@ const Dashboard = ({ websocket, receivedSignals }) => {
   const signalsByCategory = getSignalsByCategory();
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
+    <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-            <Activity className="w-8 h-8 text-blue-400" />
-            Solar Car Signal Dashboard
+            <Activity className="w-8 h-8" style={{ color: '#A90515' }} />
+            Solar Car 2 Electrical Testbench
           </h1>
           <p className="text-gray-400">
-            {dashboardMode === 'send' ? 'Control and send CAN signals' : 'Monitor incoming CAN signals'}
+            {dashboardMode === 'send' ? 'Send and Receive CAN Signals' : 'Monitor incoming CAN signals'}
           </p>
         </div>
 
         {/* Control Panel */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6 shadow-xl">
+        <div className="bg-gray-900 rounded-lg p-6 mb-6 shadow-xl border border-gray-800">
           {/* Send/Read Toggle */}
-          <div className="flex gap-3 mb-6 pb-6 border-b border-gray-700">
+          <div className="flex gap-3 mb-6 pb-6 border-b border-gray-800">
             <button
               onClick={() => {
                 setDashboardMode('send');
                 setIsRunning(false);
               }}
               className={`px-6 py-3 rounded-lg font-medium transition flex items-center gap-2 ${
-                dashboardMode === 'send' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                dashboardMode === 'send' ? 'text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
+              style={{ backgroundColor: dashboardMode === 'send' ? '#A90515' : undefined }}
             >
               <Send className="w-5 h-5" />
               Send Mode
@@ -239,16 +240,18 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                   <button
                     onClick={() => setMode('random')}
                     className={`px-4 py-2 rounded-lg font-medium transition ${
-                      mode === 'random' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      mode === 'random' ? 'text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
+                    style={{ backgroundColor: mode === 'random' ? '#A90515' : undefined }}
                   >
                     Random Wave
                   </button>
                   <button
                     onClick={() => setMode('replay')}
                     className={`px-4 py-2 rounded-lg font-medium transition ${
-                      mode === 'replay' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      mode === 'replay' ? 'text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
+                    style={{ backgroundColor: mode === 'replay' ? '#A90515' : undefined }}
                   >
                     CSV Replay
                   </button>
@@ -303,8 +306,8 @@ const Dashboard = ({ websocket, receivedSignals }) => {
         {/* Signal Display */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {Object.entries(signalsByCategory).map(([category, signalNames]) => (
-            <div key={category} className="bg-gray-800 rounded-lg p-6 shadow-xl">
-              <h2 className="text-xl font-semibold mb-4 text-blue-400">{category}</h2>
+            <div key={category} className="bg-gray-900 rounded-lg p-6 shadow-xl border border-gray-800">
+              <h2 className="text-xl font-semibold mb-4" style={{ color: '#A90515' }}>{category}</h2>
               
               <div className="space-y-4">
                 {signalNames.map(signalName => {
@@ -326,7 +329,7 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                   const hasReceivedData = dashboardMode === 'read' && receivedSignals?.[signalName];
 
                   return (
-                    <div key={signalName} className={`bg-gray-700 rounded-lg p-4 ${hasReceivedData ? 'ring-2 ring-green-500' : ''}`}>
+                    <div key={signalName} className={`bg-gray-800 rounded-lg p-4 ${hasReceivedData ? 'ring-2 ring-green-500' : ''}`}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
                           {dashboardMode === 'send' && (
@@ -348,7 +351,10 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className={`text-lg font-mono ${hasReceivedData ? 'text-green-400' : 'text-gray-400'}`}>
+                          <span
+                            className="text-lg font-mono"
+                            style={{ color: hasReceivedData ? '#10b981' : 'rgba(255,255,255,0.87)' }}
+                          >
                             {dataType === 'bool' ? (value ? 'TRUE' : 'FALSE') : 
                              typeof value === 'number' ? value.toFixed(2) : '—'} {units}
                           </span>
@@ -367,7 +373,7 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                             <select
                               value={value}
                               onChange={(e) => updateManualValue(signalName, e.target.value)}
-                              className="w-full bg-gray-600 rounded px-3 py-2"
+                              className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600"
                             >
                               <option value="0">FALSE</option>
                               <option value="1">TRUE</option>
@@ -380,7 +386,7 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                               max={max}
                               value={value}
                               onChange={(e) => updateManualValue(signalName, e.target.value)}
-                              className="w-full bg-gray-600 rounded px-3 py-2"
+                              className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600"
                             />
                           )}
                         </div>
@@ -397,7 +403,7 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                                 step="0.1"
                                 value={waveConfig[signalName]?.frequency || 0.5}
                                 onChange={(e) => updateWaveConfig(signalName, 'frequency', e.target.value)}
-                                className="w-full bg-gray-600 rounded px-2 py-1 mt-1"
+                                className="w-full bg-gray-700 rounded px-2 py-1 mt-1 border border-gray-600"
                               />
                             </div>
                             <div>
@@ -407,7 +413,7 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                                 step="0.1"
                                 value={waveConfig[signalName]?.phase || 0}
                                 onChange={(e) => updateWaveConfig(signalName, 'phase', e.target.value)}
-                                className="w-full bg-gray-600 rounded px-2 py-1 mt-1"
+                                className="w-full bg-gray-700 rounded px-2 py-1 mt-1 border border-gray-600"
                               />
                             </div>
                           </div>
@@ -416,12 +422,11 @@ const Dashboard = ({ websocket, receivedSignals }) => {
 
                       {dataType !== 'bool' && (
                         <div className="mt-2">
-                          <div className="h-2 bg-gray-600 rounded-full overflow-hidden">
+                          <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
                             <div
-                              className={`h-full transition-all duration-200 ${
-                                hasReceivedData ? 'bg-green-500' : 'bg-blue-500'
-                              }`}
+                              className="h-full transition-all duration-200"
                               style={{ 
+                                backgroundColor: hasReceivedData ? '#10b981' : '#A90515',
                                 width: `${typeof value === 'number' ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0}%` 
                               }}
                             />
