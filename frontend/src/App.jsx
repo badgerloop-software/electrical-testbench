@@ -1,51 +1,63 @@
 import { useEffect, useState, useRef } from "react";
 import "./App.css";
-import MessageList from "./components/MessageList";
+import Dashboard from "./components/Dashboard";
 
 const server = 8765;
 
 function App() {
-  const [messages, setMessages] = useState([]);
+  const [ws, setWs] = useState(null);
+  const [receivedSignals, setReceivedSignals] = useState({});
   const connected = useRef(false);
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://localhost:${server}`);
     if (connected.current) return;
     connected.current = true;
 
-    ws.onopen = () => {
+    const websocket = new WebSocket(`ws://localhost:${server}`);
+
+    websocket.onopen = () => {
       console.log("Connected to Python WebSocket Server");
+      setWs(websocket);
     };
 
-    ws.onmessage = (event) => {
-      console.log(event);
+    websocket.onmessage = (event) => {
+      console.log("Received from backend:", event.data);
       try {
-        const data = JSON.parse(event.data); // the backend sends JSON
-        const displayMsg = `[${data.timestamp}] ID:${data.can_id} Name:${
-          data.signal_name
-        }: ${
-          typeof data.value === "boolean"
-            ? data.value.toString()
-            : typeof data.value === "number"
-            ? data.value.toFixed(2)
-            : "N/A"
-        }`;
-        setMessages((prev) => [...prev, displayMsg]);
+        const data = JSON.parse(event.data);
+        // Update received signals with timestamp
+        if (data.signal_name && data.value !== undefined) {
+          setReceivedSignals(prev => ({
+            ...prev,
+            [data.signal_name]: {
+              value: data.value,
+              timestamp: data.timestamp || Date.now() / 1000,
+              can_id: data.can_id
+            }
+          }));
+        }
       } catch (err) {
-        console.error("Failed to parse message:", err);
+        console.error("Failed to parse incoming message:", err);
       }
     };
 
-    ws.onerror = (err) => {
+    websocket.onerror = (err) => {
       console.error("WebSocket error:", err);
+    };
+
+    websocket.onclose = () => {
+      console.log("WebSocket connection closed");
+      connected.current = false;
+    };
+
+    return () => {
+      if (websocket.readyState === WebSocket.OPEN) {
+        websocket.close();
+      }
     };
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
-      <h1 className="text-xl font-bold mb-4">Car Dashboard</h1>
-      <MessageList messages={messages} />
-    </div>
+    <Dashboard websocket={ws} receivedSignals={receivedSignals} />
   );
 }
 
