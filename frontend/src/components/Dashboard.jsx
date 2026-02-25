@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Upload, Download, Activity, Send, Radio } from 'lucide-react';
+import { Play, Pause, Upload, Download, Activity, Send, Radio, ChevronDown } from 'lucide-react';
 import { SIGNAL_CONFIG, getSignalsByCategory } from '../signalConfig';
 
 const Dashboard = ({ websocket, receivedSignals }) => {
@@ -13,6 +13,8 @@ const Dashboard = ({ websocket, receivedSignals }) => {
   const [waveConfig, setWaveConfig] = useState({});
   const timeRef = useRef(0);
   const animationRef = useRef(null);
+  const signalsByCategory = getSignalsByCategory();
+  const [expandedCategories, setExpandedCategories] = useState(new Set(Object.keys(signalsByCategory)));
 
   // Initialize signals and wave configs
   useEffect(() => {
@@ -46,6 +48,31 @@ const Dashboard = ({ websocket, receivedSignals }) => {
       websocket.send(message);
       console.log('Sent signal update:', signalName, value);
     }
+  };
+
+  // Toggle category expansion
+  const toggleExpand = (category) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all signals in a category
+  const selectAll = (category) => {
+    const signalNames = signalsByCategory[category];
+    setSelectedSignals(prev => new Set([...prev, ...signalNames]));
+  };
+
+  // Deselect all signals in a category
+  const deselectAll = (category) => {
+    const signalNames = signalsByCategory[category];
+    setSelectedSignals(prev => new Set([...prev].filter(s => !signalNames.includes(s))));
   };
 
   // Animation loop for random mode
@@ -186,8 +213,6 @@ const Dashboard = ({ websocket, receivedSignals }) => {
     }));
   };
 
-  const signalsByCategory = getSignalsByCategory();
-
   return (
     <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-7xl mx-auto">
@@ -304,13 +329,40 @@ const Dashboard = ({ websocket, receivedSignals }) => {
         </div>
 
         {/* Signal Display */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {Object.entries(signalsByCategory).map(([category, signalNames]) => (
             <div key={category} className="bg-gray-900 rounded-lg p-6 shadow-xl border border-gray-800">
-              <h2 className="text-xl font-semibold mb-4" style={{ color: '#A90515' }}>{category}</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold" style={{ color: '#A90515' }}>{category}</h2>
+                <div className="flex items-center gap-2">
+                  {dashboardMode === 'send' && (
+                    <>
+                      <button
+                        onClick={() => selectAll(category)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={() => deselectAll(category)}
+                        className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 transition"
+                      >
+                        Deselect All
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => toggleExpand(category)}
+                    className="text-white hover:text-gray-300 transition"
+                  >
+                    <ChevronDown className={`w-5 h-5 transform transition-transform ${expandedCategories.has(category) ? 'rotate-0' : '-rotate-90'}`} />
+                  </button>
+                </div>
+              </div>
               
-              <div className="space-y-4">
-                {signalNames.map(signalName => {
+              {expandedCategories.has(category) && (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {signalNames.map(signalName => {
                   const config = SIGNAL_CONFIG[signalName];
                   const [_, dataType, units, min, max] = config;
                   
@@ -440,7 +492,8 @@ const Dashboard = ({ websocket, receivedSignals }) => {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
