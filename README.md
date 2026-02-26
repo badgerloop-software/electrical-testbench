@@ -2,6 +2,8 @@
 
 A web-based dashboard for testing and monitoring CAN bus signals in real-time. This system allows you to send and receive CAN messages through an intuitive frontend interface, running on a Raspberry Pi connected to the vehicle's CAN bus.
 
+The dashboard uses a **unified TX/RX architecture** — just like a real CAN node, it transmits and receives simultaneously. Each signal has a per-signal direction dropdown (TX or RX). TX signals can be driven via random wave, CSV replay, or manual input. RX signals display live values from the bus. Any signal (TX or RX) can be plotted on the always-visible graph panel.
+
 **Primary Use Case**: Connect your laptop/desktop to the Raspberry Pi over Tailscale, run the backend on the Pi, and interact with the CAN bus through the web dashboard.
 
 Link to docs: https://www.waveshare.com/wiki/RS485_CAN_HAT#Install_Library
@@ -10,8 +12,10 @@ CAN Messages: https://docs.google.com/spreadsheets/d/12O2UPdM_fqUVKd0IXZ638wb1ob
 
 ## Features
 
-- **Send Mode**: Generate and transmit CAN signals via Random Wave, CSV Replay, or Manual Override
-- **Read Mode**: Monitor incoming CAN messages in real-time with live signal values
+- **Unified TX/RX Dashboard**: No mode switching — transmit and receive simultaneously, just like a real CAN node
+- **Per-Signal Direction**: Each signal has a TX/RX dropdown — TX to inject onto the bus, RX to monitor from the bus
+- **TX Generation**: Drive TX signals via Random Wave, CSV Replay, or Manual Override
+- **Live Graphing**: Check any signal's plot checkbox (TX or RX) to visualize its value over time
 - **Bi-directional WebSocket communication** between frontend and CAN bus
 - **BSR Red branding** with D-DIN font
 - **180+ signals** from format.json organized by subsystem
@@ -95,9 +99,11 @@ Open your browser to `http://localhost:5173`
 
 ### 3. Use the Dashboard
 
-- **Send Mode**: Control CAN signals with random waves, CSV replay, or manual values
-- **Read Mode**: Monitor live incoming CAN messages (values turn green when received)
-- Toggle between modes with the buttons at the top
+- By default all signals start as **RX** (passive monitoring)
+- Set individual signals (or entire categories) to **TX** to inject values onto the CAN bus
+- Choose a TX generation mode: **Random Wave** or **CSV Replay**, then click **Start**
+- When TX generation is stopped, TX signals show manual input controls for one-off sends
+- Check the **plot** checkbox on any signal to visualize it on the live graph panel
 
 ## Project Structure
 
@@ -115,7 +121,8 @@ electrical-testbench/
 │   │   ├── App.jsx               # WebSocket connection manager
 │   │   ├── signalConfig.js       # Frontend signal definitions
 │   │   └── components/
-│   │       └── Dashboard.jsx     # Main dashboard UI
+│   │       ├── Dashboard.jsx     # Main unified dashboard UI
+│   │       └── Graph.jsx         # Live signal graph component
 │   ├── public/fonts/             # D-DIN fonts
 │   └── package.json
 ├── sc1-data-format/              # Signal definitions (submodule)
