@@ -78,12 +78,21 @@ class MyListener(can.Listener):
     def parse_data(self, message_data):
         # get can_id
         can_id = message_data["id"]
-        # loop to find can_id
-        if can_id not in signal_definitions:
-            logging.error(f"CAN ID {can_id:0x} not found in signal definitions.")
-            return None
-        signals = signal_definitions[can_id]
         byte_array = bytes(message_data["data"])
+
+        # If CAN ID not in definitions, return as unknown message
+        if can_id not in signal_definitions:
+            logging.debug(f"CAN ID 0x{can_id:03X} not found in signal definitions.")
+            return ParsedData(
+                can_id,
+                f"UNKNOWN_0x{can_id:03X}",
+                byte_array.hex(),
+                message_data["timestamp"],
+                is_unknown=True
+            )
+
+        signals = signal_definitions[can_id]
+        results = []
 
         for offset, signals_info in signals.items():
             logging.debug(
@@ -125,7 +134,7 @@ class MyListener(can.Listener):
                     logging.debug(
                         f"New Message: ID={can_id:0x},Name={signal_name} Value={value}, Time Stamp={message_data['timestamp']}"
                     )
-                    return ParsedData(can_id, signal_name, value, message_data["timestamp"])
+                    results.append(ParsedData(can_id, signal_name, value, message_data["timestamp"]))
 
                 elif data_type in ("bool", "boolean"):
                     # Determine the byte and bit and extract boolean
@@ -134,10 +143,10 @@ class MyListener(can.Listener):
                         logging.debug(
                             f"New Message: ID={can_id:0x},Name={signal_name} Value={bool_value}, Time Stamp={message_data['timestamp']}"
                         )
-                        return ParsedData(can_id, signal_name, bool_value, message_data["timestamp"])
+                        results.append(ParsedData(can_id, signal_name, bool_value, message_data["timestamp"]))
                     else:
                         logging.error(f"Insufficient data for boolean signal '{signal_name}' in CAN ID {can_id:0x}.")
-                        return None
+                        continue
 
                 elif data_type in ("uint8", "uint16", "uint32", "uint64", "int8", "int16"):
                     fmt = None
@@ -156,18 +165,20 @@ class MyListener(can.Listener):
                         logging.debug(
                             f"New Message: ID={can_id:0x},Name={signal_name} Value={value}, Time Stamp={message_data['timestamp']}"
                         )
-                        return ParsedData(can_id, signal_name, value, message_data["timestamp"])
+                        results.append(ParsedData(can_id, signal_name, value, message_data["timestamp"]))
                     else:
                         logging.error(f"Insufficient data for integer signal '{signal_name}' in CAN ID {can_id:0x}.")
-                        return None
+                        continue
 
                 else:
                     logging.debug(f"Unhandled data type '{data_type}' for signal '{signal_name}'")
-                    return None
+                    continue
 
             except struct.error as e:
                 logging.error(f"Struct error while parsing signal '{signal_name}' in CAN ID {can_id:0x}: {e}")
-                return None
+                continue
+
+        return results if results else None
 
 
 if __name__ == "__main__":

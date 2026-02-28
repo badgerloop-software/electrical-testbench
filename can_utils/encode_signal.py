@@ -19,6 +19,23 @@ json_path = os.path.normpath(
 with open(json_path, "r") as f:
     signal_definitions = json.load(f)
 
+# Diagnostic ID range for temporary FFF signal assignments (0x700-0x7FF)
+DIAG_ID_START = 0x700
+DIAG_ID_END = 0x7FF
+
+# Generate consistent temporary diagnostic IDs for FFF signals
+# This creates a deterministic mapping based on signal name hash
+fff_signal_ids = {}
+diag_id_counter = DIAG_ID_START
+
+for sig_name, sig_config in signal_definitions.items():
+    if sig_config[-2].upper() == "FFF":
+        if diag_id_counter <= DIAG_ID_END:
+            fff_signal_ids[sig_name] = diag_id_counter
+            diag_id_counter += 1
+        else:
+            logging.warning(f"Ran out of diagnostic IDs for FFF signal '{sig_name}'")
+
 
 def encode_signal_to_can(signal_name: str, value: Any) -> tuple[int, bytes] | None:
     """
@@ -36,13 +53,23 @@ def encode_signal_to_can(signal_name: str, value: Any) -> tuple[int, bytes] | No
         return None
     
     signal_config = signal_definitions[signal_name]
-    
+
     # Format: [bytes, type, units, min, max, subsystem, can_id, offset]
     num_bytes = signal_config[0]
     data_type = signal_config[1]
-    can_id = int(signal_config[-2], 16)  # Convert hex string to int
+    can_id_hex = signal_config[-2]
+    can_id = int(can_id_hex, 16)  # Convert hex string to int
     offset = signal_config[-1]
-    
+
+    # Check for FFF placeholder - assign temporary diagnostic ID
+    if can_id_hex.upper() == "FFF":
+        if signal_name in fff_signal_ids:
+            can_id = fff_signal_ids[signal_name]
+            logging.info(f"Signal '{signal_name}' has placeholder ID FFF - using temporary diagnostic ID 0x{can_id:03X}")
+        else:
+            logging.error(f"Signal '{signal_name}' has placeholder ID FFF but no diagnostic ID available")
+            return None
+
     # Encode value based on data type
     try:
         if data_type == "float":

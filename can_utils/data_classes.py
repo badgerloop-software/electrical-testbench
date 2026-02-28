@@ -16,5 +16,6 @@ class SignalInfo:
 class ParsedData:
     can_id: int
     signal_name: str
-    value: float | bool
+    value: float | bool | str
     timestamp: float
+    is_unknown: bool = False

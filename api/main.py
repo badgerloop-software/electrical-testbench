@@ -38,13 +38,29 @@ class WebSocketsListener(MyListener):
             "data": message.data,  # bytes object
             "timestamp": message.timestamp,
         }
+
+        # Broadcast raw message for trace window
+        raw_message = {
+            "type": "raw_message",
+            "can_id": message.arbitration_id,
+            "can_id_hex": f"0x{message.arbitration_id:03X}",
+            "dlc": len(message.data),
+            "data_hex": message.data.hex(),
+            "timestamp": message.timestamp,
+        }
+        self.loop.create_task(self.send_to_clients(json.dumps(raw_message)))
+
         # Parse the message using parse_data, if cannot parse (data/canID is invalid), parsed is None
-        parsed = self.parse_data(message_data)
-        if parsed:
-            # Convert the parsed data into JSON.
-            json_data = json.dumps(parsed.__dict__)
-            # Send callback
-            self.loop.create_task(self.send_to_clients(json_data))
+        parsed_list = self.parse_data(message_data)
+        if parsed_list:
+            # Handle both single result and list of results
+            if not isinstance(parsed_list, list):
+                parsed_list = [parsed_list]
+            for parsed in parsed_list:
+                # Convert the parsed data into JSON.
+                json_data = json.dumps(parsed.__dict__)
+                # Send callback
+                self.loop.create_task(self.send_to_clients(json_data))
 
 
 # --- WebSocket Handler ---

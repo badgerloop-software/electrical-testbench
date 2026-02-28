@@ -7,6 +7,8 @@ const server = 8765;
 function App() {
   const [ws, setWs] = useState(null);
   const [receivedSignals, setReceivedSignals] = useState({});
+  const [rawMessages, setRawMessages] = useState([]);
+  const [unknownSignals, setUnknownSignals] = useState([]);
   const connected = useRef(false);
 
   useEffect(() => {
@@ -24,6 +26,25 @@ function App() {
       console.log("Received from backend:", event.data);
       try {
         const data = JSON.parse(event.data);
+
+        // Handle raw CAN messages for trace window
+        if (data.type === "raw_message") {
+          setRawMessages(prev => [...prev, data]);
+          return;
+        }
+
+        // Handle unknown signals
+        if (data.is_unknown) {
+          setUnknownSignals(prev => {
+            // Only add if not already in list
+            if (!prev.some(s => s.can_id === data.can_id && s.timestamp === data.timestamp)) {
+              return [...prev, data];
+            }
+            return prev;
+          });
+          return;
+        }
+
         // Update received signals with timestamp
         if (data.signal_name && data.value !== undefined) {
           setReceivedSignals(prev => ({
@@ -57,7 +78,12 @@ function App() {
   }, []);
 
   return (
-    <Dashboard websocket={ws} receivedSignals={receivedSignals} />
+    <Dashboard
+      websocket={ws}
+      receivedSignals={receivedSignals}
+      rawMessages={rawMessages}
+      unknownSignals={unknownSignals}
+    />
   );
 }
 
