@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, Upload, Download, Activity, ChevronDown } from 'lucide-react';
 import { SIGNAL_CONFIG, getSignalsByCategory } from '../signalConfig';
 import Graph from './Graph';
+import TraceWindow from './TraceWindow';
 
-const Dashboard = ({ websocket, receivedSignals }) => {
+const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignals = [] }) => {
+  console.log('Dashboard render start');
   // TX generation mode: random wave or csv replay
   const [mode, setMode] = useState('random');
   const [isRunning, setIsRunning] = useState(false);
@@ -29,6 +31,7 @@ const Dashboard = ({ websocket, receivedSignals }) => {
   const animationRef = useRef(null);
 
   const signalsByCategory = getSignalsByCategory();
+  console.log('signalsByCategory', signalsByCategory);
   const [expandedCategories, setExpandedCategories] = useState(new Set(Object.keys(signalsByCategory)));
 
   // Derived: set of signal names currently in TX mode
@@ -58,7 +61,7 @@ const Dashboard = ({ websocket, receivedSignals }) => {
   }, []);
 
   // Send a signal update to the backend via WebSocket
-  const sendSignalUpdate = React.useCallback((signalName, value) => {
+  const sendSignalUpdate = useCallback((signalName, value) => {
     if (websocket && websocket.readyState === WebSocket.OPEN) {
       const message = JSON.stringify({
         type: 'signal_update',
@@ -337,8 +340,13 @@ const Dashboard = ({ websocket, receivedSignals }) => {
           </div>
         </div>
 
+        {/* Trace Window Section (moved here) */}
+        <div className="mt-6">
+          <TraceWindow rawMessages={rawMessages} unknownSignals={unknownSignals} />
+        </div>
+
         {/* Main Grid: signal list + graph */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_560px] gap-6 items-start">
           {/* Left column: category cards */}
           <div>
             {Object.entries(signalsByCategory).map(([category, signalNames]) => {
@@ -537,10 +545,11 @@ const Dashboard = ({ websocket, receivedSignals }) => {
           </div>
 
           {/* Right column: always-visible graph */}
-          <div className="sticky top-6">
+          <div className="sticky top-6 space-y-6 lg:col-span-1">
             <Graph history={signalHistory} signals={[...plotSignals]} />
           </div>
         </div>
+
       </div>
     </div>
   );
