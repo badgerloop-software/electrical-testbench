@@ -247,7 +247,7 @@ const Graph = ({ history, signals }) => {
       );
       if (arr.length < 2) return;
 
-      const config = SIGNAL_CONFIG[name];
+      const config = SIGNAL_CONFIG[name] || [];
       const unit = config[2] || '';
 
       ctx.strokeStyle = COLORS[idx % COLORS.length];
