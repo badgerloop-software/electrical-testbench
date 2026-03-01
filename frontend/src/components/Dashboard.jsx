@@ -40,9 +40,9 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
   console.log('signalsByCategory', signalsByCategory);
   const [expandedCategories, setExpandedCategories] = useState(new Set(Object.keys(signalsByCategory)));
   // Multiple graph panes (each graph holds its own selected signals and chooser state)
-  const [graphs, setGraphs] = useState([{ id: 1, signals: [], chooserOpen: false }]);
+  const [graphs, setGraphs] = useState([{ id: 1, signals: [], chooserOpen: false, chooserQuery: '' }]);
   const nextGraphId = useRef(2);
-  const addGraph = () => setGraphs(prev => [...prev, { id: nextGraphId.current++, signals: [], chooserOpen: false }]);
+  const addGraph = () => setGraphs(prev => [...prev, { id: nextGraphId.current++, signals: [], chooserOpen: false, chooserQuery: '' }]);
   const removeGraph = (id) => setGraphs(prev => prev.filter(g => g.id !== id));
 
   const toggleChooser = (graphId) => {
@@ -56,6 +56,29 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
       s.has(signalName) ? s.delete(signalName) : s.add(signalName);
       return { ...g, signals: [...s] };
     }));
+  };
+
+  const setChooserQuery = (graphId, q) => {
+    setGraphs(prev => prev.map(g => g.id === graphId ? { ...g, chooserQuery: q } : g));
+  };
+
+  // Return JSX with the matched substring highlighted for the given query (case-insensitive)
+  const highlightMatch = (text, q) => {
+    if (!q) return text;
+    const lower = text.toLowerCase();
+    const needle = q.toLowerCase().trim();
+    const idx = lower.indexOf(needle);
+    if (idx === -1) return text;
+    const before = text.slice(0, idx);
+    const match = text.slice(idx, idx + needle.length);
+    const after = text.slice(idx + needle.length);
+    return (
+      <>
+        {before}
+        <span className="bg-yellow-400 text-black px-1 rounded">{match}</span>
+        {after}
+      </>
+    );
   };
 
   const setGraphCategorySignals = (graphId, category, enable) => {
@@ -441,26 +464,40 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
                 {/* Signal chooser panel (grouped by subsystem) */}
                 {g.chooserOpen && (
                   <div className="mb-4 bg-gray-800 p-4 rounded max-h-80 overflow-y-auto border border-gray-700">
-                    {Object.entries(signalsByCategory).map(([category, names]) => (
-                      <div key={category} className="mb-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-sm font-semibold" style={{ color: '#A90515' }}>{category}</div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setGraphCategorySignals(g.id, category, true)} className="text-xs px-2 py-0.5 bg-gray-700 rounded hover:bg-gray-600">Select All</button>
-                            <button onClick={() => setGraphCategorySignals(g.id, category, false)} className="text-xs px-2 py-0.5 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+                    <div className="mb-3">
+                      <input
+                        type="search"
+                        placeholder="Search signals..."
+                        value={g.chooserQuery || ''}
+                        onChange={(e) => setChooserQuery(g.id, e.target.value)}
+                        className="w-full bg-gray-900 rounded px-3 py-2 border border-gray-700 text-sm mb-3"
+                      />
+                    </div>
+                    {Object.entries(signalsByCategory).map(([category, names]) => {
+                      const q = (g.chooserQuery || '').toLowerCase().trim();
+                      const filtered = q ? names.filter(n => n.toLowerCase().includes(q)) : names;
+                      if (filtered.length === 0) return null;
+                      return (
+                        <div key={category} className="mb-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-sm font-semibold" style={{ color: '#A90515' }}>{category}</div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => setGraphCategorySignals(g.id, category, true)} className="text-xs px-2 py-0.5 bg-gray-700 rounded hover:bg-gray-600">Select All</button>
+                              <button onClick={() => setGraphCategorySignals(g.id, category, false)} className="text-xs px-2 py-0.5 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {filtered.map(signalName => (
+                              <label key={signalName} className="flex items-center gap-2 text-sm bg-gray-900 rounded px-2 py-1 border border-gray-700">
+                                <input type="checkbox" checked={(g.signals || []).includes(signalName)} onChange={() => toggleGraphSignal(g.id, signalName)} className="w-4 h-4" />
+                                <span className="truncate inline-block max-w-full">{highlightMatch(signalName, q)}</span>
+                              </label>
+                            ))}
                           </div>
                         </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {names.map(signalName => (
-                            <label key={signalName} className="flex items-center gap-2 text-sm bg-gray-900 rounded px-2 py-1 border border-gray-700">
-                              <input type="checkbox" checked={(g.signals || []).includes(signalName)} onChange={() => toggleGraphSignal(g.id, signalName)} className="w-4 h-4" />
-                              <span className="truncate">{signalName}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
