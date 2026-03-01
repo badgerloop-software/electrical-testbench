@@ -15,7 +15,7 @@ CAN Messages: https://docs.google.com/spreadsheets/d/12O2UPdM_fqUVKd0IXZ638wb1ob
 - **Unified TX/RX Dashboard**: No mode switching — transmit and receive simultaneously, just like a real CAN node
 - **Per-Signal Direction**: Each signal has a TX/RX dropdown — TX to inject onto the bus, RX to monitor from the bus
 - **TX Generation**: Drive TX signals via Random Wave, CSV Replay, or Manual Override
-- **Live Graphing**: Check any signal's plot checkbox (TX or RX) to visualize its value over time
+- **Live Graphing**: Use each graph's **Choose Signals** menu to select any TX or RX signal to visualize its value over time
 - **Bi-directional WebSocket communication** between frontend and CAN bus
 - **BSR Red branding** with D-DIN font
 - **180+ signals** from format.json organized by subsystem

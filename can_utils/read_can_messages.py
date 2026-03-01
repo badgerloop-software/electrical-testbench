@@ -150,14 +150,25 @@ class MyListener(can.Listener):
 
                 elif data_type in ("uint8", "uint16", "uint32", "uint64", "int8", "int16"):
                     fmt = None
-                    if num_bytes == 1:
-                        fmt = "<B"
-                    elif num_bytes == 2:
-                        fmt = "<H"
-                    elif num_bytes == 4:
-                        fmt = "<I"
-                    elif num_bytes == 8:
-                        fmt = "<Q"
+                    if data_type in ("uint8", "uint16", "uint32", "uint64"):
+                        if num_bytes == 1:
+                            fmt = "<B"
+                        elif num_bytes == 2:
+                            fmt = "<H"
+                        elif num_bytes == 4:
+                            fmt = "<I"
+                        elif num_bytes == 8:
+                            fmt = "<Q"
+                    else:
+                        # Signed integer types
+                        if num_bytes == 1:
+                            fmt = "<b"
+                        elif num_bytes == 2:
+                            fmt = "<h"
+                        elif num_bytes == 4:
+                            fmt = "<i"
+                        elif num_bytes == 8:
+                            fmt = "<q"
 
                     if fmt and len(byte_array) >= byte_index + num_bytes:
                         raw = struct.unpack_from(fmt, byte_array, byte_index)[0]
