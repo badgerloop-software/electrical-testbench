@@ -87,11 +87,75 @@ The WebSocket server will run on port 8765.
 
 **Update Frontend Configuration:**
 
-Edit `frontend/src/App.jsx` and replace `localhost` with your Pi's Tailscale IP:
+### Configuring the frontend host
 
-```javascript
-const websocket = new WebSocket(`ws://100.64.1.5:${server}`);
+The React app connects to the WebSocket server on port `8765` by default. Rather than hardcoding `localhost`, the client can read a host (and port) from environment variables injected at build time by Vite.
+
+- **VITE_PI_HOST** – hostname or IP of the Pi (e.g. Tailscale address)
+- **VITE_PI_PORT** – optional port, defaults to `8765`
+
+Example (bash):
+
+```bash
+export VITE_PI_HOST=100.64.1.5   # or tailscale hostname
+# optional: export VITE_PI_PORT=8765
+cd frontend
+npm install      # first time only
+npm run dev
 ```
+
+By default the code falls back to `localhost:8765` so you can still run locally without any vars.
+
+#### Using Tailscale MagicDNS 🌀
+
+If your Pi is on a Tailnet with **MagicDNS** enabled, you can reach it by name instead of typing an IP. The Tailscale admin UI shows several addresses under *Addresses* for the device, for example:
+
+```
+electrical-testbench
+electrical-testbench.taila50ceb.ts.net
+fd7a:115c:a1e0::4839:d42e
+100.124.212.46
+```
+
+- Use the **short hostname** (`electrical-testbench`) from other machines on the same Tailnet; DNS search paths usually resolve it automatically.
+- Or use the **fully qualified MagicDNS name** (`electrical-testbench.taila50ceb.ts.net`) anywhere—it's globally resolvable across your Tailnet.
+- You *can* also use the IPv4 address (`100.124.212.46`) directly if you prefer, though hostname is easier to remember.
+- The IPv6 address works too, but some browsers/clients may require bracket notation for ports (`[fd7a:...]:8765`).
+
+So set `VITE_PI_HOST` to whichever value works best in your environment.
+
+These variables are baked into the build, so update them and restart or rebuild the frontend after changing them.
+
+**Install and Run Frontend:**
+
+```bash
+cd frontend
+npm install        # install dependencies first time
+# start development server and make it listen on all hosts so other
+# machines (including via Tailscale) can reach it
+npm run dev        # runs `vite --host` (see config below)
+
+# or for a production build:
+# npm run build && npm run preview
+```
+
+> **Note:** by default Vite only listens on localhost. If you want to
+> browse the dev server from another device (or via a Tailscale hostname),
+> the server must bind to the Pi's network interface. The `--host` flag
+> (or `server.host` in `vite.config.js`) does this, allowing connections to
+> `electrical-testbench:5173` or `electrical-testbench.taila50ceb.ts.net:5173`.
+>
+> Additionally, Vite performs a host check and will reject requests from
+> unknown hostnames with an error like:
+> ```
+> Blocked request. This host ("electrical-testbench") is not allowed.
+> To allow this host, add "electrical-testbench" to `server.allowedHosts`
+> in vite.config.js.
+> ```
+> The updated `vite.config.js` in this repository already includes
+> `allowedHosts` entries for the Pi's Tailscale names, or you can use
+> `['*']` to accept any host.
+
 
 **Install and Run Frontend:**
 

@@ -1,0 +1,16 @@
+[Unit]
+Description=Electrical Testbench Backend (WebSocket Server)
+After=network.target can0-setup.service
+Requires=can0-setup.service
+
+[Service]
+Type=simple
+User=sunpi
+WorkingDirectory=/home/sunpi/electrical-testbench
+Environment=PYTHONPATH=/home/sunpi/electrical-testbench
+ExecStart=/home/sunpi/electrical-testbench/venv/bin/python3 api/main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

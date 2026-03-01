@@ -1,0 +1,14 @@
+[Unit]
+Description=Electrical Testbench Frontend (Vite Dev Server)
+After=network.target
+
+[Service]
+Type=simple
+User=sunpi
+WorkingDirectory=/home/sunpi/electrical-testbench/frontend
+ExecStart=/usr/bin/npm run dev
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

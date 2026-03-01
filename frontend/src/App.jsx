@@ -3,10 +3,11 @@ import "./App.css";
 import Dashboard from "./components/Dashboard";
 
 const server = import.meta.env.VITE_PI_PORT ? Number(import.meta.env.VITE_PI_PORT) : 8765;
-const host = import.meta.env.VITE_PI_HOST || "localhost";
+const host = import.meta.env.VITE_PI_HOST || window.location.hostname;
 
 function App() {
   const [ws, setWs] = useState(null);
+  const [wsStatus, setWsStatus] = useState('connecting');
   const [receivedSignals, setReceivedSignals] = useState({});
   const [rawMessages, setRawMessages] = useState([]);
   const [unknownSignals, setUnknownSignals] = useState([]);
@@ -21,6 +22,7 @@ function App() {
     websocket.onopen = () => {
       console.log("Connected to Python WebSocket Server");
       setWs(websocket);
+      setWsStatus('connected');
     };
 
     websocket.onmessage = (event) => {
@@ -64,11 +66,13 @@ function App() {
 
     websocket.onerror = (err) => {
       console.error("WebSocket error:", err);
+      setWsStatus('disconnected');
     };
 
     websocket.onclose = () => {
       console.log("WebSocket connection closed");
       connected.current = false;
+      setWsStatus('disconnected');
     };
 
     return () => {
@@ -81,6 +85,7 @@ function App() {
   return (
     <Dashboard
       websocket={ws}
+      wsStatus={wsStatus}
       receivedSignals={receivedSignals}
       rawMessages={rawMessages}
       unknownSignals={unknownSignals}

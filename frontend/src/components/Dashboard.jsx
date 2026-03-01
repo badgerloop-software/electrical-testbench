@@ -4,7 +4,7 @@ import { SIGNAL_CONFIG, getSignalsByCategory } from '../signalConfig';
 import Graph from './Graph';
 import TraceWindow from './TraceWindow';
 
-const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignals = [] }) => {
+const Dashboard = ({ websocket, wsStatus = 'connecting', receivedSignals, rawMessages = [], unknownSignals = [] }) => {
   console.log('Dashboard render start');
   // TX generation mode: random wave or csv replay
   const [mode, setMode] = useState('random');
@@ -358,12 +358,28 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
             </svg>
             BSR Electrical Testbench
           </h1>
-          <p className="text-gray-400">
+          <p className="text-gray-400 flex items-center gap-3 flex-wrap">
             CAN Bus Monitor &amp; Injector &mdash;{' '}
             <span className="text-green-400">{rxCount} RX</span>
             <span className="mx-1">&middot;</span>
             <span style={{ color: '#A90515' }}>{txCount} TX</span>
             {isRunning && <span className="ml-2 text-yellow-400 animate-pulse">&#9679; TRANSMITTING</span>}
+            <span className={`inline-flex items-center gap-1.5 ml-auto text-xs font-medium px-2.5 py-1 rounded-full border ${
+              wsStatus === 'connected'
+                ? 'border-green-700 text-green-400 bg-green-950'
+                : wsStatus === 'connecting'
+                ? 'border-yellow-700 text-yellow-400 bg-yellow-950'
+                : 'border-red-800 text-red-400 bg-red-950'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${
+                wsStatus === 'connected'
+                  ? 'bg-green-400 animate-pulse'
+                  : wsStatus === 'connecting'
+                  ? 'bg-yellow-400 animate-pulse'
+                  : 'bg-red-500'
+              }`} />
+              {wsStatus === 'connected' ? 'Backend connected' : wsStatus === 'connecting' ? 'Connecting…' : 'Backend disconnected'}
+            </span>
           </p>
         </div>
 
