@@ -27,17 +27,61 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
   const [replayData, setReplayData] = useState(null);
   const [replayIndex, setReplayIndex] = useState(0);
   const [waveConfig, setWaveConfig] = useState({});
+  // Signals the user has manually locked/overridden while in TX mode
+  const [manualOverride, setManualOverride] = useState(new Set());
   const timeRef = useRef(0);
   const animationRef = useRef(null);
+  // Keep a ref copy so the animation loop always sees the latest locks without
+  // re-creating the animation effect at every toggle.
+  const manualOverrideRef = useRef(manualOverride);
+  useEffect(() => { manualOverrideRef.current = manualOverride; }, [manualOverride]);
 
   const signalsByCategory = getSignalsByCategory();
   console.log('signalsByCategory', signalsByCategory);
   const [expandedCategories, setExpandedCategories] = useState(new Set(Object.keys(signalsByCategory)));
-  // Multiple graph panes
-  const [graphs, setGraphs] = useState([{ id: 1 }]);
+  // Multiple graph panes (each graph holds its own selected signals and chooser state)
+  const [graphs, setGraphs] = useState([{ id: 1, signals: [], chooserOpen: false }]);
   const nextGraphId = useRef(2);
-  const addGraph = () => setGraphs(prev => [...prev, { id: nextGraphId.current++ }]);
+  const addGraph = () => setGraphs(prev => [...prev, { id: nextGraphId.current++, signals: [], chooserOpen: false }]);
   const removeGraph = (id) => setGraphs(prev => prev.filter(g => g.id !== id));
+
+  const toggleChooser = (graphId) => {
+    setGraphs(prev => prev.map(g => g.id === graphId ? { ...g, chooserOpen: !g.chooserOpen } : g));
+  };
+
+  const toggleGraphSignal = (graphId, signalName) => {
+    setGraphs(prev => prev.map(g => {
+      if (g.id !== graphId) return g;
+      const s = new Set(g.signals || []);
+      s.has(signalName) ? s.delete(signalName) : s.add(signalName);
+      return { ...g, signals: [...s] };
+    }));
+  };
+
+  const setGraphCategorySignals = (graphId, category, enable) => {
+    const names = signalsByCategory[category] || [];
+    setGraphs(prev => prev.map(g => {
+      if (g.id !== graphId) return g;
+      const s = new Set(g.signals || []);
+      if (enable) names.forEach(n => s.add(n)); else names.forEach(n => s.delete(n));
+      return { ...g, signals: [...s] };
+    }));
+  };
+
+  const toggleManualOverride = (signalName) => {
+    setManualOverride(prev => {
+      const s = new Set(prev);
+      if (s.has(signalName)) {
+        s.delete(signalName);
+      } else {
+        s.add(signalName);
+        // send the current value immediately when locking
+        const val = signals[signalName];
+        if (val !== undefined) sendSignalUpdate(signalName, val);
+      }
+      return s;
+    });
+  };
 
   // Derived: set of signal names currently in TX mode
   const txSignals = new Set(
@@ -103,12 +147,18 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
     }
 
     const animate = () => {
-      if (mode === 'random') {
+            if (mode === 'random') {
         timeRef.current += 0.016; // ~60 fps
 
         setSignals(prev => {
           const next = { ...prev };
           txSignals.forEach(name => {
+            // If user manually locked this signal, do not overwrite its value
+            if (manualOverrideRef.current.has(name)) {
+              // still send the manual value
+              sendSignalUpdate(name, next[name]);
+              return;
+            }
             const config = SIGNAL_CONFIG[name];
             if (!config) return;
             const [, dataType, , min, max] = config;
@@ -135,6 +185,11 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
           setSignals(prevSig => {
             const nextSig = { ...prevSig };
             txSignals.forEach(key => {
+                // if user has manual override, skip replay overwriting and instead send manual value
+                if (manualOverrideRef.current.has(key)) {
+                  sendSignalUpdate(key, nextSig[key]);
+                  return;
+                }
               if (row[key] !== undefined) {
                 const v = parseFloat(row[key]);
                 if (!isNaN(v)) {
@@ -234,6 +289,20 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
       return s;
     });
   };
+
+  // Manual override helpers: when running, user can enter a value and click Send to transmit once
+  const handleManualInputChange = (signalName, value) => {
+    const config = SIGNAL_CONFIG[signalName];
+    const [, dataType, , min, max] = config;
+    let parsed = dataType === 'bool' ? (value === '1' || value === 'true' ? 1 : 0) : parseFloat(value);
+    if (dataType !== 'bool') parsed = isNaN(parsed) ? (signals[signalName] ?? min) : Math.max(min, Math.min(max, parsed));
+    setSignals(prev => ({ ...prev, [signalName]: parsed }));
+    if (manualOverride.has(signalName)) {
+      sendSignalUpdate(signalName, parsed);
+    }
+  };
+
+  // removed explicit Send button; manual locks will cause continuous transmission of the current value
 
   const updateManualValue = (signalName, value) => {
     const config = SIGNAL_CONFIG[signalName];
@@ -360,10 +429,42 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
             {/* Graph */}
             {graphs.map(g => (
               <div key={g.id} className="bg-gray-900 rounded-lg p-8 shadow-xl border border-gray-800">
-                <div className="flex justify-end mb-2">
-                  <button onClick={() => removeGraph(g.id)} className="px-2 py-1 text-xs bg-gray-800 rounded hover:bg-gray-700">Remove</button>
+                <div className="flex items-start justify-between mb-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => toggleChooser(g.id)} className="px-2 py-1 text-xs bg-gray-800 rounded hover:bg-gray-700">Choose Signals ({(g.signals || []).length})</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => removeGraph(g.id)} className="px-2 py-1 text-xs bg-gray-800 rounded hover:bg-gray-700">Remove</button>
+                  </div>
                 </div>
-                <Graph history={signalHistory} signals={[...plotSignals]} />
+
+                {/* Signal chooser panel (grouped by subsystem) */}
+                {g.chooserOpen && (
+                  <div className="mb-4 bg-gray-800 p-4 rounded max-h-80 overflow-y-auto border border-gray-700">
+                    {Object.entries(signalsByCategory).map(([category, names]) => (
+                      <div key={category} className="mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-sm font-semibold" style={{ color: '#A90515' }}>{category}</div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => setGraphCategorySignals(g.id, category, true)} className="text-xs px-2 py-0.5 bg-gray-700 rounded hover:bg-gray-600">Select All</button>
+                            <button onClick={() => setGraphCategorySignals(g.id, category, false)} className="text-xs px-2 py-0.5 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {names.map(signalName => (
+                            <label key={signalName} className="flex items-center gap-2 text-sm bg-gray-900 rounded px-2 py-1 border border-gray-700">
+                              <input type="checkbox" checked={(g.signals || []).includes(signalName)} onChange={() => toggleGraphSignal(g.id, signalName)} className="w-4 h-4" />
+                              <span className="truncate">{signalName}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Graph history={signalHistory} signals={(g.signals || [])} />
               </div>
             ))}
 
@@ -435,21 +536,14 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
                               <select
                                 value={dir}
                                 onChange={(e) => setDirection(signalName, e.target.value)}
-                                className={`text-xs font-bold rounded px-2 py-1 border-0 cursor-pointer ${isTx ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}
+                                className={`text-xs font-bold rounded px-2 py-1 border-0 cursor-pointer`}
+                                style={{ backgroundColor: isTx ? '#A90515' : '#10b981', color: isTx ? 'white' : 'black' }}
                               >
-                                <option value="rx">RX</option>
-                                <option value="tx">TX</option>
+                                <option value="rx" style={{ color: '#064e3b', backgroundColor: '#bbf7d0' }}>RX</option>
+                                <option value="tx" style={{ color: '#ffffff', backgroundColor: '#A90515' }}>TX</option>
                               </select>
 
-                              <label className="flex items-center gap-1 cursor-pointer select-none" title="Plot on graph">
-                                <input
-                                  type="checkbox"
-                                  checked={isPlotted}
-                                  onChange={() => togglePlotSignal(signalName)}
-                                  className="w-3.5 h-3.5 rounded accent-blue-500"
-                                />
-                                <span className="text-[10px] text-gray-500">plot</span>
-                              </label>
+                              {/* Plot selection moved to per-graph chooser; removed global plot checkbox */}
 
                               <span className="font-medium flex-1">{signalName}</span>
 
@@ -469,15 +563,35 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
                               </div>
                             )}
 
-                            {isTx && !isRunning && (
-                              <div className="mt-3">
+                            {isTx && (
+                              <div className="mt-3 flex gap-2 items-center">
                                 {dataType === 'bool' ? (
-                                  <select value={value} onChange={(e) => updateManualValue(signalName, e.target.value)} className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm">
-                                    <option value="0">FALSE</option>
-                                    <option value="1">TRUE</option>
-                                  </select>
+                                  <>
+                                    <select value={signals[signalName] ?? value} onChange={(e) => {
+                                      if (!isRunning) updateManualValue(signalName, e.target.value);
+                                      else handleManualInputChange(signalName, e.target.value);
+                                    }} className="bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm">
+                                      <option value="0">FALSE</option>
+                                      <option value="1">TRUE</option>
+                                    </select>
+                                    <div className="flex items-center gap-2">
+                                      <button onClick={() => toggleManualOverride(signalName)} className={`px-2 py-1 text-xs rounded ${manualOverride.has(signalName) ? 'bg-yellow-600 text-black' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                        {manualOverride.has(signalName) ? 'Locked' : 'Manual'}
+                                      </button>
+                                    </div>
+                                  </>
                                 ) : (
-                                  <input type="number" step="0.01" min={min} max={max} value={value} onChange={(e) => updateManualValue(signalName, e.target.value)} className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm" />
+                                  <>
+                                    <input type="number" step="0.01" min={min} max={max} value={signals[signalName] ?? value} onChange={(e) => {
+                                      if (!isRunning) updateManualValue(signalName, e.target.value);
+                                      else handleManualInputChange(signalName, e.target.value);
+                                    }} className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm" />
+                                    <div className="flex items-center gap-2">
+                                      <button onClick={() => toggleManualOverride(signalName)} className={`px-2 py-1 text-xs rounded ${manualOverride.has(signalName) ? 'bg-yellow-600 text-black' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                        {manualOverride.has(signalName) ? 'Locked' : 'Manual'}
+                                      </button>
+                                    </div>
+                                  </>
                                 )}
                               </div>
                             )}
