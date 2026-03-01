@@ -1,6 +1,6 @@
 // Signal configuration dynamically loaded from format.json
 // Format: [size_bytes, datatype, units, min, max, "subsystem;description"]
-import formatData from '../../sc1-data-format/format.json';
+import formatData from '../../sc-data-format/format.json';
 
 const SIGNAL_CONFIG = {};
 for (const [name, arr] of Object.entries(formatData)) {

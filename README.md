@@ -131,7 +131,7 @@ electrical-testbench/
 │   │       └── Graph.jsx         # Live signal graph component
 │   ├── public/fonts/             # D-DIN fonts
 │   └── package.json
-├── sc1-data-format/              # Signal definitions (submodule)
+├── sc-data-format/              # Signal definitions (submodule)
 │   └── format.json               # CAN signal specifications
 ├── d-din/                        # D-DIN font files
 └── README.md
@@ -210,7 +210,7 @@ python mock_messages.py
 - Test with `cansend` or `candump` utilities
 
 **Signals not encoding:**
-- Ensure signal name matches exactly in `sc1-data-format/format.json`
+- Ensure signal name matches exactly in `sc-data-format/format.json`
 - Check backend logs for encoding errors
 
 **Numbers showing white instead of green:**
