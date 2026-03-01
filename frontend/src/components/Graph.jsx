@@ -34,13 +34,19 @@ const Graph = ({ history, signals }) => {
     const header = ['timestamp', ...signals];
     rows.push(header.join(','));
 
+    // Pre-index each signal's history into a Map for O(1) lookups
+    const signalMaps = {};
+    signals.forEach(name => {
+      const arr = history[name] || [];
+      signalMaps[name] = new Map(arr.map(p => [p.timestamp, p.value]));
+    });
+
     // Build data rows
     sortedTimestamps.forEach(ts => {
       const row = [ts];
       signals.forEach(name => {
-        const arr = history[name] || [];
-        const point = arr.find(p => p.timestamp === ts);
-        row.push(point ? point.value : '');
+        const val = signalMaps[name].get(ts);
+        row.push(val !== undefined ? val : '');
       });
       rows.push(row.join(','));
     });
