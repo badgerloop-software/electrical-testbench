@@ -13,7 +13,7 @@ import logging
 # Load signal definitions from JSON
 base_dir = os.path.dirname(os.path.abspath(__file__))
 json_path = os.path.normpath(
-    os.path.join(base_dir, "..", "sc1-data-format", "format.json")
+    os.path.join(base_dir, "..", "sc-data-format", "format.json")
 )
 
 with open(json_path, "r") as f:
