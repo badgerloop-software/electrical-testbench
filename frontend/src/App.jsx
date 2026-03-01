@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import "./App.css";
 import Dashboard from "./components/Dashboard";
 
-const server = 8765;
+const server = import.meta.env.VITE_PI_PORT ? Number(import.meta.env.VITE_PI_PORT) : 8765;
+const host = import.meta.env.VITE_PI_HOST || "localhost";
 
 function App() {
   const [ws, setWs] = useState(null);
@@ -15,7 +16,7 @@ function App() {
     if (connected.current) return;
     connected.current = true;
 
-    const websocket = new WebSocket(`ws://localhost:${server}`);
+    const websocket = new WebSocket(`ws://${host}:${server}`);
 
     websocket.onopen = () => {
       console.log("Connected to Python WebSocket Server");
