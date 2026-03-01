@@ -20,11 +20,17 @@ CAN Messages: https://docs.google.com/spreadsheets/d/12O2UPdM_fqUVKd0IXZ638wb1ob
 - **BSR Red branding** with D-DIN font
 - **180+ signals** from format.json organized by subsystem
 
+## Screenshots
+
+<p align="center">
+  <img src="frontend/public/screenshots/Frontend_UI.png" alt="Dashboard Screenshot" width="900"/>
+</p>
+
 ## Architecture
 
 ```
 Laptop/Desktop (Browser) <--WebSocket--> Raspberry Pi (Backend) <--CAN--> Vehicle CAN Bus
-        ↓ Tailscale VPN ↓
+  ↓ Tailscale VPN ↓
 ```
 
 ## Quick Start (Primary Workflow)

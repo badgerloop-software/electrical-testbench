@@ -354,9 +354,9 @@ const Graph = ({ history, signals }) => {
 
       <canvas
         ref={canvasRef}
-        width={800}
-        height={384}
-        className="w-full h-96 bg-gray-800 rounded cursor-grab active:cursor-grabbing"
+        width={1200}
+        height={600}
+        className="w-full h-[32rem] bg-gray-800 rounded cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

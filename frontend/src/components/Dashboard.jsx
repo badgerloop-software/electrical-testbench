@@ -33,6 +33,11 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
   const signalsByCategory = getSignalsByCategory();
   console.log('signalsByCategory', signalsByCategory);
   const [expandedCategories, setExpandedCategories] = useState(new Set(Object.keys(signalsByCategory)));
+  // Multiple graph panes
+  const [graphs, setGraphs] = useState([{ id: 1 }]);
+  const nextGraphId = useRef(2);
+  const addGraph = () => setGraphs(prev => [...prev, { id: nextGraphId.current++ }]);
+  const removeGraph = (id) => setGraphs(prev => prev.filter(g => g.id !== id));
 
   // Derived: set of signal names currently in TX mode
   const txSignals = new Set(
@@ -255,9 +260,11 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
       <div className="max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-            <Activity className="w-8 h-8" style={{ color: '#A90515' }} />
-            Solar Car 2 Electrical Testbench
+          <h1 className="text-3xl font-bold mb-2 flex items-center gap-8">
+            <svg className="w-24 h-24" viewBox="0 0 2500 1100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M1204.7,1006.34c442.1,70.2,887.04,55.56,1334.7,60.97-679.66,67.22-1732.39,61.06-2360.96-196.05C.58,812.36-2.79,588.73,170.53,525.08c132.04-58.4,277.85-71.77,420.1-82.5,109.31,4.7,221.52-7.99,330.35,6.18,50.89,9.31-19.53-59.21,9.69-100.31,142.78-197.86,620.69-115.45,766.59,54.73,76.71,73.33-35.5,136.69,37.83,140.61,248.67,46.07,499.24,95.1,740.63,172.12-573.69-81.83-1235.66-237.63-1847.19-138.01-137.95,19.32-283.5,150.22-105.59,245.45,207.59,112.58,452.28,139.12,681.57,182.97M1134.45,283.19c-71.21,14.48-196.79,80.48-148.51,161.4,58.19,19.24,125.24,14.54,187.5,23.14,166.4,15.24,333,46.55,498.07,63.53,99.31-208.31-396.81-290.43-536.88-248.11M686.88,894.01c.53.72,3,.72,3.48-.1.14-.84-3.82-.87-3.48.1Z" fill="#A90515" />
+            </svg>
+            BSR Electrical Testbench
           </h1>
           <p className="text-gray-400">
             CAN Bus Monitor &amp; Injector &mdash;{' '}
@@ -340,14 +347,32 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
           </div>
         </div>
 
-        {/* Trace Window Section (moved here) */}
-        <div className="mt-6">
-          <TraceWindow rawMessages={rawMessages} unknownSignals={unknownSignals} />
-        </div>
+        {/* Main Grid: left = controls/trace/graph, right = category cards */}
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(720px,2fr)_1fr] gap-6 items-start">
+          {/* Left stack: TX controls, trace, graph */}
+          <div className="space-y-6">
+            {/* TX Control Panel (already rendered above) */}
+            {/* Trace Window Section (moved here) */}
+            <div className="mt-0">
+              <TraceWindow rawMessages={rawMessages} unknownSignals={unknownSignals} />
+            </div>
 
-        {/* Main Grid: signal list + graph */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_560px] gap-6 items-start">
-          {/* Left column: category cards */}
+            {/* Graph */}
+            {graphs.map(g => (
+              <div key={g.id} className="bg-gray-900 rounded-lg p-8 shadow-xl border border-gray-800">
+                <div className="flex justify-end mb-2">
+                  <button onClick={() => removeGraph(g.id)} className="px-2 py-1 text-xs bg-gray-800 rounded hover:bg-gray-700">Remove</button>
+                </div>
+                <Graph history={signalHistory} signals={[...plotSignals]} />
+              </div>
+            ))}
+
+            <div className="mt-2">
+              <button onClick={addGraph} className="px-3 py-2 bg-gray-800 rounded hover:bg-gray-700">Add Graph</button>
+            </div>
+          </div>
+
+          {/* Right column: category cards */}
           <div>
             {Object.entries(signalsByCategory).map(([category, signalNames]) => {
               const catTxCount = signalNames.filter(n => signalDirection[n] === 'tx').length;
@@ -392,7 +417,6 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
                         const dir = signalDirection[signalName];
                         const isTx = dir === 'tx';
 
-                        // Value source
                         let value, timestamp, canId;
                         if (isTx) {
                           value = signals[signalName] ?? 0;
@@ -406,27 +430,17 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
                         const isPlotted = plotSignals.has(signalName);
 
                         return (
-                          <div
-                            key={signalName}
-                            className={`bg-gray-800 rounded-lg p-4 border ${
-                              isTx ? 'border-red-900/40' : hasReceivedData ? 'border-green-500' : 'border-gray-700'
-                            }`}
-                          >
-                            {/* Row 1: direction, name, plot, value */}
+                          <div key={signalName} className={`bg-gray-800 rounded-lg p-4 border ${isTx ? 'border-red-900/40' : hasReceivedData ? 'border-green-500' : 'border-gray-700'}`}>
                             <div className="flex items-center gap-3">
-                              {/* TX/RX selector */}
                               <select
                                 value={dir}
                                 onChange={(e) => setDirection(signalName, e.target.value)}
-                                className={`text-xs font-bold rounded px-2 py-1 border-0 cursor-pointer ${
-                                  isTx ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'
-                                }`}
+                                className={`text-xs font-bold rounded px-2 py-1 border-0 cursor-pointer ${isTx ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}
                               >
                                 <option value="rx">RX</option>
                                 <option value="tx">TX</option>
                               </select>
 
-                              {/* Plot checkbox */}
                               <label className="flex items-center gap-1 cursor-pointer select-none" title="Plot on graph">
                                 <input
                                   type="checkbox"
@@ -437,96 +451,54 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
                                 <span className="text-[10px] text-gray-500">plot</span>
                               </label>
 
-                              {/* Signal name */}
                               <span className="font-medium flex-1">{signalName}</span>
 
-                              {/* CAN ID for RX */}
                               {!isTx && canId && (
                                 <span className="text-xs text-gray-500">0x{canId.toString(16).toUpperCase()}</span>
                               )}
 
-                              {/* Value */}
-                              <span
-                                className="text-lg font-mono tabular-nums"
-                                style={{ color: hasReceivedData ? '#10b981' : isTx ? '#f87171' : 'rgba(255,255,255,0.87)' }}
-                              >
-                                {dataType === 'bool'
-                                  ? (value ? 'TRUE' : 'FALSE')
-                                  : typeof value === 'number' ? value.toFixed(2) : '\u2014'}{' '}
+                              <span className="text-lg font-mono tabular-nums" style={{ color: hasReceivedData ? '#10b981' : isTx ? '#f87171' : 'rgba(255,255,255,0.87)' }}>
+                                {dataType === 'bool' ? (value ? 'TRUE' : 'FALSE') : typeof value === 'number' ? value.toFixed(2) : '\u2014'}{' '}
                                 <span className="text-xs text-gray-400">{units}</span>
                               </span>
                             </div>
 
-                            {/* Timestamp for RX */}
                             {!isTx && timestamp && (
                               <div className="text-[10px] text-gray-500 mt-1 pl-28">
                                 {new Date(timestamp * 1000).toLocaleTimeString()}
                               </div>
                             )}
 
-                            {/* TX: manual controls when TX generation is stopped */}
                             {isTx && !isRunning && (
                               <div className="mt-3">
                                 {dataType === 'bool' ? (
-                                  <select
-                                    value={value}
-                                    onChange={(e) => updateManualValue(signalName, e.target.value)}
-                                    className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm"
-                                  >
+                                  <select value={value} onChange={(e) => updateManualValue(signalName, e.target.value)} className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm">
                                     <option value="0">FALSE</option>
                                     <option value="1">TRUE</option>
                                   </select>
                                 ) : (
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min={min}
-                                    max={max}
-                                    value={value}
-                                    onChange={(e) => updateManualValue(signalName, e.target.value)}
-                                    className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm"
-                                  />
+                                  <input type="number" step="0.01" min={min} max={max} value={value} onChange={(e) => updateManualValue(signalName, e.target.value)} className="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 text-sm" />
                                 )}
                               </div>
                             )}
 
-                            {/* TX: wave config when running in random mode */}
                             {isTx && isRunning && mode === 'random' && dataType !== 'bool' && (
                               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                                 <div>
                                   <label className="text-gray-400 text-xs">Freq (Hz)</label>
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    value={waveConfig[signalName]?.frequency || 0.5}
-                                    onChange={(e) => updateWaveConfig(signalName, 'frequency', e.target.value)}
-                                    className="w-full bg-gray-700 rounded px-2 py-1 mt-1 border border-gray-600"
-                                  />
+                                  <input type="number" step="0.1" value={waveConfig[signalName]?.frequency || 0.5} onChange={(e) => updateWaveConfig(signalName, 'frequency', e.target.value)} className="w-full bg-gray-700 rounded px-2 py-1 mt-1 border border-gray-600" />
                                 </div>
                                 <div>
                                   <label className="text-gray-400 text-xs">Phase</label>
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    value={waveConfig[signalName]?.phase || 0}
-                                    onChange={(e) => updateWaveConfig(signalName, 'phase', e.target.value)}
-                                    className="w-full bg-gray-700 rounded px-2 py-1 mt-1 border border-gray-600"
-                                  />
+                                  <input type="number" step="0.1" value={waveConfig[signalName]?.phase || 0} onChange={(e) => updateWaveConfig(signalName, 'phase', e.target.value)} className="w-full bg-gray-700 rounded px-2 py-1 mt-1 border border-gray-600" />
                                 </div>
                               </div>
                             )}
 
-                            {/* Progress bar for numeric signals */}
                             {dataType !== 'bool' && (
                               <div className="mt-2">
                                 <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full transition-all duration-200"
-                                    style={{
-                                      backgroundColor: isTx ? '#A90515' : hasReceivedData ? '#10b981' : '#4b5563',
-                                      width: `${typeof value === 'number' ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0}%`,
-                                    }}
-                                  />
+                                  <div className="h-full transition-all duration-200" style={{ backgroundColor: isTx ? '#A90515' : hasReceivedData ? '#10b981' : '#4b5563', width: `${typeof value === 'number' ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0}%` }} />
                                 </div>
                                 <div className="flex justify-between text-[10px] text-gray-500 mt-0.5">
                                   <span>{min}</span>
@@ -542,11 +514,6 @@ const Dashboard = ({ websocket, receivedSignals, rawMessages = [], unknownSignal
                 </div>
               );
             })}
-          </div>
-
-          {/* Right column: always-visible graph */}
-          <div className="sticky top-6 space-y-6 lg:col-span-1">
-            <Graph history={signalHistory} signals={[...plotSignals]} />
           </div>
         </div>
 
