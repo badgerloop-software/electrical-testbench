@@ -11,6 +11,8 @@ function App() {
   const [receivedSignals, setReceivedSignals] = useState({});
   const [rawMessages, setRawMessages] = useState([]);
   const [unknownSignals, setUnknownSignals] = useState([]);
+  const [canBitrate, setCanBitrate] = useState(500000);
+  const [availableBitrates, setAvailableBitrates] = useState([125000, 250000, 500000, 1000000]);
   const connected = useRef(false);
 
   useEffect(() => {
@@ -29,6 +31,24 @@ function App() {
       console.log("Received from backend:", event.data);
       try {
         const data = JSON.parse(event.data);
+
+        // Handle bitrate status messages
+        if (data.type === "bitrate_status") {
+          setCanBitrate(data.bitrate);
+          setAvailableBitrates(data.available_bitrates || [125000, 250000, 500000, 1000000]);
+          return;
+        }
+
+        // Handle bitrate change response
+        if (data.type === "bitrate_response") {
+          if (data.success) {
+            setCanBitrate(data.bitrate);
+            console.log("Bitrate changed to:", data.bitrate);
+          } else {
+            console.error("Bitrate change failed:", data.message);
+          }
+          return;
+        }
 
         // Handle raw CAN messages for trace window
         if (data.type === "raw_message") {
@@ -82,6 +102,15 @@ function App() {
     };
   }, []);
 
+  const handleBitrateChange = (newBitrate) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "set_bitrate",
+        bitrate: newBitrate
+      }));
+    }
+  };
+
   return (
     <Dashboard
       websocket={ws}
@@ -89,6 +118,9 @@ function App() {
       receivedSignals={receivedSignals}
       rawMessages={rawMessages}
       unknownSignals={unknownSignals}
+      canBitrate={canBitrate}
+      availableBitrates={availableBitrates}
+      onBitrateChange={handleBitrateChange}
     />
   );
 }

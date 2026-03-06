@@ -2,6 +2,7 @@ import asyncio
 import websockets
 import can
 import json
+import subprocess
 from can_utils.read_can_messages import MyListener
 from can_utils.encode_signal import encode_signal_to_can
 import logging
@@ -21,6 +22,45 @@ clients = set()
 
 # Setup CAN Bus Interface
 bus = can.interface.Bus(channel="can0", bustype="socketcan")
+
+# Default bitrate
+CURRENT_BITRATE = 500000
+
+# Valid bitrates
+VALID_BITRATES = [125000, 250000, 500000, 1000000]
+
+
+def set_can_bitrate(bitrate):
+    """
+    Change CAN bitrate by bringing interface down/up.
+    Returns (success, message)
+    """
+    global CURRENT_BITRATE
+
+    if bitrate not in VALID_BITRATES:
+        return False, f"Invalid bitrate. Valid options: {VALID_BITRATES}"
+
+    try:
+        # Bring can0 down
+        subprocess.run(["ip", "link", "set", "can0", "down"], check=True)
+        # Set new bitrate and bring up
+        subprocess.run([
+            "ip", "link", "set", "can0", "up", "type", "can", "bitrate", str(bitrate)
+        ], check=True)
+
+        CURRENT_BITRATE = bitrate
+        # Reinitialize the CAN bus interface with new bitrate
+        global bus
+        bus = can.interface.Bus(channel="can0", bustype="socketcan")
+
+        logging.info(f"CAN bitrate changed to {bitrate}")
+        return True, f"Bitrate set to {bitrate}"
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to change bitrate: {e}")
+        return False, str(e)
+    except Exception as e:
+        logging.error(f"Error changing bitrate: {e}")
+        return False, str(e)
 
 
 class WebSocketsListener(MyListener):
@@ -68,17 +108,47 @@ async def handle_connection(websocket):
     clients.add(websocket)
     logging.info("Client connected")
 
+    # Send current bitrate to newly connected client
+    await websocket.send(json.dumps({
+        "type": "bitrate_status",
+        "bitrate": CURRENT_BITRATE,
+        "available_bitrates": VALID_BITRATES
+    }))
+
     try:
         async for message in websocket:
             logging.info(f"Received from client: {message}")
-            
+
             # Handle incoming signal updates from dashboard
             try:
                 data = json.loads(message)
+
+                # Handle bitrate change request
+                if data.get("type") == "set_bitrate":
+                    bitrate = data.get("bitrate")
+                    success, msg = set_can_bitrate(bitrate)
+                    await websocket.send(json.dumps({
+                        "type": "bitrate_response",
+                        "success": success,
+                        "message": msg,
+                        "bitrate": CURRENT_BITRATE
+                    }))
+                    continue
+
+                # Handle bitrate status request
+                if data.get("type") == "get_bitrate":
+                    await websocket.send(json.dumps({
+                        "type": "bitrate_status",
+                        "bitrate": CURRENT_BITRATE,
+                        "available_bitrates": VALID_BITRATES
+                    }))
+                    continue
+
+                # Handle signal updates
                 if data.get("type") == "signal_update":
                     signal_name = data.get("signal_name")
                     value = data.get("value")
-                    
+
                     if signal_name and value is not None:
                         # Encode and send CAN message
                         result = encode_signal_to_can(signal_name, value)
@@ -100,7 +170,7 @@ async def handle_connection(websocket):
                 logging.warning(f"Received non-JSON message: {message}")
             except Exception as e:
                 logging.error(f"Error processing message: {e}")
-                
+
     except websockets.exceptions.ConnectionClosed:
         logging.info("Client disconnected")
     finally:

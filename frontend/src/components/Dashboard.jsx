@@ -4,7 +4,7 @@ import { SIGNAL_CONFIG, getSignalsByCategory } from '../signalConfig';
 import Graph from './Graph';
 import TraceWindow from './TraceWindow';
 
-const Dashboard = ({ websocket, wsStatus = 'connecting', receivedSignals, rawMessages = [], unknownSignals = [] }) => {
+const Dashboard = ({ websocket, wsStatus = 'connecting', receivedSignals, rawMessages = [], unknownSignals = [], canBitrate = 500000, availableBitrates = [125000, 250000, 500000, 1000000], onBitrateChange }) => {
   console.log('Dashboard render start');
   // TX generation mode: random wave or csv replay
   const [mode, setMode] = useState('random');
@@ -379,6 +379,17 @@ const Dashboard = ({ websocket, wsStatus = 'connecting', receivedSignals, rawMes
                   : 'bg-red-500'
               }`} />
               {wsStatus === 'connected' ? 'Backend connected' : wsStatus === 'connecting' ? 'Connecting…' : 'Backend disconnected'}
+            {' '}
+            <select
+              value={canBitrate}
+              onChange={(e) => onBitrateChange && onBitrateChange(Number(e.target.value))}
+              className="ml-2 text-xs bg-gray-800 text-gray-300 border border-gray-600 rounded px-2 py-0.5 cursor-pointer hover:border-gray-500"
+              title="Change CAN bitrate"
+            >
+              {availableBitrates.map(bitrate => (
+                <option key={bitrate} value={bitrate}>{bitrate / 1000} Kbps</option>
+              ))}
+            </select>
             </span>
           </p>
         </div>
