@@ -37,6 +37,51 @@ for sig_name, sig_config in signal_definitions.items():
             logging.warning(f"Ran out of diagnostic IDs for FFF signal '{sig_name}'")
 
 
+def _clamp(value: float, vmin: float, vmax: float) -> float:
+    lower = min(vmin, vmax)
+    upper = max(vmin, vmax)
+    return max(lower, min(upper, value))
+
+
+def _scale_to_uint16(value: float, vmin: float, vmax: float) -> int:
+    """Map a physical value into a 16-bit unsigned scalar using nominal range."""
+    if vmax == vmin:
+        return int(round(_clamp(value, vmin, vmax)))
+    clamped = _clamp(value, vmin, vmax)
+    ratio = (clamped - vmin) / (vmax - vmin)
+    return int(round(ratio * 65535))
+
+
+def _scale_to_uint8(value: float, vmin: float, vmax: float) -> int:
+    if vmax == vmin:
+        return int(round(_clamp(value, vmin, vmax))) & 0xFF
+    clamped = _clamp(value, vmin, vmax)
+    ratio = (clamped - vmin) / (vmax - vmin)
+    return int(round(ratio * 255)) & 0xFF
+
+
+def _write_bytes(frame: bytearray, bit_offset: int, data: bytes) -> None:
+    if bit_offset % 8 != 0:
+        raise ValueError(f"bit offset {bit_offset} is not byte-aligned")
+    byte_idx = bit_offset // 8
+    if byte_idx + len(data) > len(frame):
+        raise ValueError(
+            f"signal data ({len(data)} bytes @ bit {bit_offset}) exceeds CAN frame"
+        )
+    frame[byte_idx : byte_idx + len(data)] = data
+
+
+def _write_bool(frame: bytearray, bit_offset: int, value: Any) -> None:
+    byte_idx = bit_offset // 8
+    bit_idx = bit_offset % 8
+    if byte_idx >= len(frame):
+        raise ValueError(f"bool bit offset {bit_offset} exceeds CAN frame")
+    if value:
+        frame[byte_idx] |= 1 << bit_idx
+    else:
+        frame[byte_idx] &= ~(1 << bit_idx)
+
+
 def encode_signal_to_can(signal_name: str, value: Any) -> tuple[int, bytes] | None:
     """
     Encode a signal name and value into a CAN message.
@@ -57,9 +102,11 @@ def encode_signal_to_can(signal_name: str, value: Any) -> tuple[int, bytes] | No
     # Format: [bytes, type, units, min, max, subsystem, can_id, offset]
     num_bytes = signal_config[0]
     data_type = signal_config[1]
+    nom_min = float(signal_config[3])
+    nom_max = float(signal_config[4])
     can_id_hex = signal_config[-2]
     can_id = int(can_id_hex, 16)  # Convert hex string to int
-    offset = signal_config[-1]
+    offset = int(signal_config[-1])
 
     # Check for FFF placeholder - assign temporary diagnostic ID
     if can_id_hex.upper() == "FFF":
@@ -72,23 +119,37 @@ def encode_signal_to_can(signal_name: str, value: Any) -> tuple[int, bytes] | No
 
     # Encode value based on data type
     try:
+        frame = bytearray(8)
+
         if data_type == "float":
-            # Pack as little-endian float (4 bytes)
-            data_bytes = struct.pack('<f', float(value))
+            if num_bytes >= 4:
+                payload = struct.pack("<f", float(value))
+            elif num_bytes == 2:
+                raw = _scale_to_uint16(float(value), nom_min, nom_max)
+                payload = struct.pack("<H", raw)
+            elif num_bytes == 1:
+                raw = _scale_to_uint8(float(value), nom_min, nom_max)
+                payload = struct.pack("B", raw)
+            else:
+                logging.error(
+                    f"Unsupported float width {num_bytes} for signal '{signal_name}'"
+                )
+                return None
+            _write_bytes(frame, offset, payload)
         elif data_type == "uint8":
-            # Pack as unsigned byte
-            data_bytes = struct.pack('B', int(value))
-        elif data_type == "bool":
-            # Pack as single byte (0 or 1)
-            data_bytes = struct.pack('B', 1 if value else 0)
+            payload = struct.pack("B", int(value) & 0xFF)
+            _write_bytes(frame, offset, payload)
+        elif data_type in ("bool", "boolean"):
+            _write_bool(frame, offset, value)
         else:
             logging.error(f"Unknown data type '{data_type}' for signal '{signal_name}'")
             return None
-        
-        # Pad to 8 bytes for CAN message (standard practice)
-        data_bytes = data_bytes + b'\x00' * (8 - len(data_bytes))
-        
-        logging.info(f"Encoded {signal_name}={value} -> CAN ID: 0x{can_id:03x}, Data: {data_bytes.hex()}")
+
+        data_bytes = bytes(frame)
+
+        logging.info(
+            f"Encoded {signal_name}={value} -> CAN ID: 0x{can_id:03x}, Data: {data_bytes.hex()}"
+        )
         return (can_id, data_bytes)
     
     except (ValueError, struct.error) as e:
