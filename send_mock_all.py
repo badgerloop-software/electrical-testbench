@@ -3,9 +3,28 @@ import time
 import can
 import logging
 import random
-from can_utils.encode_signal import signal_definitions, encode_signal_to_can
+from can_utils.encode_signal import signal_definitions, encode_signals_to_frames
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+CYCLE_INTERVAL_S = 0.05
+
+
+def random_value(sig_config):
+    data_type = sig_config[1]
+    min_val = sig_config[3]
+    max_val = sig_config[4]
+
+    if data_type == 'float':
+        if min_val == max_val:
+            return float(min_val)
+        return random.uniform(float(min_val), float(max_val))
+    if data_type in ('bool', 'boolean'):
+        return random.choice([True, False])
+    if data_type == 'uint8':
+        return random.randint(int(min_val), int(max_val))
+    return 0
+
 
 def main():
     try:
@@ -15,49 +34,47 @@ def main():
         return
 
     signals = list(signal_definitions.keys())
-    logging.info(f"Starting to send mock data for {len(signals)} signals...")
+    logging.info(
+        "Starting merged-frame mock sender for %d signals (one frame per CAN ID)...",
+        len(signals),
+    )
 
     try:
         while True:
-            for sig_name in signals:
-                # Generate a random value based on type
-                sig_config = signal_definitions[sig_name]
-                data_type = sig_config[1]
-                min_val = sig_config[3]
-                max_val = sig_config[4]
-                
-                if data_type == 'float':
-                    if min_val == max_val:
-                        val = float(min_val)
-                    else:
-                        val = random.uniform(float(min_val), float(max_val))
-                elif data_type == 'bool' or data_type == 'boolean':
-                    val = random.choice([True, False])
-                elif data_type == 'uint8':
-                    val = random.randint(int(min_val), int(max_val))
-                else:
-                    val = 0
-                
-                result = encode_signal_to_can(sig_name, val)
-                if result:
-                    can_id, data_bytes = result
-                    msg = can.Message(arbitration_id=can_id, data=data_bytes, is_extended_id=False)
-                    try:
-                        logging.debug(f"Attempting to send {sig_name}")
-                        bus.send(msg)
-                        logging.info(f"Sent {sig_name}={val} on 0x{can_id:03X}")
-                    except Exception as e:
-                        logging.error(f"Send error: {e}")
-                
-                time.sleep(0.05) # 20Hz total throughput
-            
-            logging.info("Finished one full cycle of signals. Restarting...")
-            time.sleep(1)
+            values = {
+                sig_name: random_value(signal_definitions[sig_name])
+                for sig_name in signals
+            }
+            frames = encode_signals_to_frames(values)
+
+            sent = 0
+            for can_id, data_bytes in sorted(frames.items()):
+                msg = can.Message(
+                    arbitration_id=can_id,
+                    data=data_bytes,
+                    is_extended_id=False,
+                )
+                try:
+                    bus.send(msg)
+                    sent += 1
+                    logging.debug("Sent 0x%03X data=%s", can_id, data_bytes.hex())
+                except Exception as e:
+                    logging.error(f"Send error for 0x{can_id:03X}: {e}")
+
+            logging.info(
+                "Cycle complete: %d CAN frames for %d signals (soc=%.1f, pack_voltage=%.1f)",
+                sent,
+                len(values),
+                float(values.get('soc', 0)),
+                float(values.get('pack_voltage', 0)),
+            )
+            time.sleep(CYCLE_INTERVAL_S)
 
     except KeyboardInterrupt:
         logging.info("Stopped by user")
     finally:
         bus.shutdown()
+
 
 if __name__ == "__main__":
     main()
